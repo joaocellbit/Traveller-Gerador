@@ -33,6 +33,84 @@ star_subtype = {
     11: {"Numeric": 2, "M-type": 7},
     12: {"Numeric": 0, "M-type": 9},
 }
+star_data = {
+    "O0": {
+        "Mass": {"Ia": 200, "Ib": 150, "II": 130, "III": 110, "IV": 90, "V": 2, "VI": 2},
+        "Temperature": "50,000K",
+        "Colour": "Blue"
+    },
+    "O5": {
+        "Mass": {"Ia": 80, "Ib": 60, "II": 40, "III": 30, "IV": 20, "V": 1.5, "VI": 1.5},
+        "Temperature": "40,000K",
+        "Colour": "Blue White"
+    },
+    "B0": {
+        "Mass": {"Ia": 60, "Ib": 40, "II": 30, "III": 20, "IV": 18, "V": 0.5, "VI": 0.5},
+        "Temperature": "30,000K",
+        "Colour": "Blue White"
+    },
+    "B5": {
+        "Mass": {"Ia": 30, "Ib": 25, "II": 20, "III": 10, "IV": 10, "V": 0.4, "VI": 0.4},
+        "Temperature": "15,000K",
+        "Colour": "Blue White"
+    },
+    "A0": {
+        "Mass": {"Ia": 20, "Ib": 15, "II": 14, "III": 8, "IV": 4, "V": 2.2, "VI": 2.2},
+        "Temperature": "10,000K",
+        "Colour": "White"
+    },
+    "A5": {
+        "Mass": {"Ia": 15, "Ib": 13, "II": 11, "III": 6, "IV": 2.3, "V": 1.8, "VI": 1.8},
+        "Temperature": "8,000K",
+        "Colour": "White"
+    },
+    "F0": {
+        "Mass": {"Ia": 13, "Ib": 12, "II": 10, "III": 4, "IV": 2, "V": 1.5, "VI": 1.5},
+        "Temperature": "7,500K",
+        "Colour": "Yellow White"
+    },
+    "F5": {
+        "Mass": {"Ia": 12, "Ib": 10, "II": 8, "III": 3, "IV": 1.5, "V": 1.3, "VI": 1.3},
+        "Temperature": "6,500K",
+        "Colour": "Yellow White"
+    },
+    "G0": {
+        "Mass": {"Ia": 12, "Ib": 10, "II": 8, "III": 2.5, "IV": 1.7, "V": 1.1, "VI": 0.8},
+        "Temperature": "6,000K",
+        "Colour": "Yellow"
+    },
+    "G5": {
+        "Mass": {"Ia": 13, "Ib": 11, "II": 10, "III": 2.4, "IV": 1.2, "V": 0.9, "VI": 0.7},
+        "Temperature": "5,600K",
+        "Colour": "Yellow"
+    },
+    "K0": {
+        "Mass": {"Ia": 14, "Ib": 12, "II": 10, "III": 1.1, "IV": 1.5, "V": 0.8, "VI": 0.6},
+        "Temperature": "5,200K",
+        "Colour": "Light Orange"
+    },
+    "K5": {
+        "Mass": {"Ia": 18, "Ib": 13, "II": 12, "III": 1.5, "IV": 0.7, "V": 0.5, "VI": 0.4},
+        "Temperature": "4,400K",
+        "Colour": "Orange Red"
+    },
+    "M0": {
+        "Mass": {"Ia": 20, "Ib": 15, "II": 14, "III": 2, "IV": 0.5, "V": 0.5, "VI": 0.4},
+        "Temperature": "3,700K",
+        "Colour": "Orange Red"
+    },
+    "M5": {
+        "Mass": {"Ia": 25, "Ib": 20, "II": 16, "III": 2.4, "IV": 0.16, "V": 0.12, "VI": 0.12},
+        "Temperature": "3,000K",
+        "Colour": "Orange Red"
+    },
+    "M9": {
+        "Mass": {"Ia": 30, "Ib": 25, "II": 18, "III": 8, "IV": 0.08, "V": 0.075, "VI": 0.075},
+        "Temperature": "2,400K",
+        "Colour": "Orange Red"
+    }
+}
+
 
 def roll_2d():
     return random.randint(1, 6) + random.randint(1, 6)
