@@ -87,7 +87,7 @@ def Gerador():
         estrela["Type"] = estrela['Hot']
     else:
         print(f"Estrela do tipo: {estrela['Type']}")
-    print("Clculando Subtype...")
+    print("Calculando Subtype...")
     dado = roll_2d()
     print("dado subtype: ",dado)
     sub_tipo = star_subtype[dado]
