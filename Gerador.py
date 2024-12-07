@@ -38,7 +38,7 @@ star_subtype = {
 def roll_2d():
     return random.randint(1, 6) + random.randint(1, 6)
 
-def Greador():
+def Gerador():
     print("gerando estrela...")
     dado = roll_2d()
     global classe_estrela
@@ -105,7 +105,7 @@ def Greador():
 
 
 
-Greador()
+Gerador()
 print(estrela_final)
 
 time.sleep(100)
