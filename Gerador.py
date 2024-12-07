@@ -1,9 +1,10 @@
 import math
 import random
 import json
+import time
 
 print("BEM VINDO ao gerador de mundos e sistemas de traveller! Usando de base o core e o World Builders Handbook")
-usuario = input("pronto pra começar? y pra sim, n pra nao ")
+time.sleep(5)
 
 estrela_final = {}
 classe_estrela = "Class V"
@@ -104,8 +105,7 @@ def Greador():
 
 
 
-if usuario == "y":
-    Greador()
-    print(estrela_final)
-else:
-    print("q pena :C")
+Greador()
+print(estrela_final)
+
+time.sleep(100)
