@@ -7,6 +7,7 @@ print("BEM VINDO ao gerador de mundos e sistemas de traveller! Usando de base o 
 
 estrela_final = {}
 classe_estrela = "Class V"
+Tipo_estrela = ""
 star_types = {
     2: {"Type": "Special", "Hot": "A", "Special": "Class VI", "Unusual": "Peculiar", "Giants": "Class III", "Peculiar": "Black Hole"},
     3: {"Type": "M", "Hot": "A", "Special": "Class VI", "Unusual": "Class VI", "Giants": "Class III", "Peculiar": "Pulsar"},
