@@ -4,7 +4,6 @@ import json
 import time
 
 print("BEM VINDO ao gerador de mundos e sistemas de traveller! Usando de base o core e o World Builders Handbook")
-time.sleep(5)
 
 estrela_final = {}
 classe_estrela = "Class V"
@@ -108,4 +107,3 @@ def Gerador():
 Gerador()
 print(estrela_final)
 
-time.sleep(100)
