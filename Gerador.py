@@ -1,6 +1,8 @@
 import math
 import random
+import json
 
+estrela_final = {}
 star_types = {
     2: {"Type": "Special", "Hot": "A", "Special": "Class VI", "Unusual": "Peculiar", "Giants": "Class III", "Peculiar": "Black Hole"},
     3: {"Type": "M", "Hot": "A", "Special": "Class VI", "Unusual": "Class VI", "Giants": "Class III", "Peculiar": "Pulsar"},
@@ -76,13 +78,16 @@ def Greador():
     dado = roll_2d()
     sub_tipo = star_subtype[dado]
     if estrela["Type"] == "M":
-        print(f"sua estrela é {estrela['Type']}{sub_tipo['M-Type']}")
+        print(f"sua estrela é {estrela['Type']}{sub_tipo['M-type']}")
+        estrela_final.update({"Type":estrela['Type'], "Subtype":sub_tipo['M-type']})
     else:
-     print(f"sua estrela é {estrela['Type']}{sub_tipo['Numeric']}")
+        print(f"sua estrela é {estrela['Type']}{sub_tipo['Numeric']}")
+        estrela_final.update({"Type":estrela['Type'], "Subtype":sub_tipo['Numeric']})
 
 
 
 if usuario == "y":
     Greador()
+    print(estrela_final)
 else:
     print("q pena :C")
