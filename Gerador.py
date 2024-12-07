@@ -2,7 +2,11 @@ import math
 import random
 import json
 
+print("BEM VINDO ao gerador de mundos e sistemas de traveller! Usando de base o core e o World Builders Handbook")
+usuario = input("pronto pra começar? y pra sim, n pra nao ")
+
 estrela_final = {}
+classe_estrela = "Class V"
 star_types = {
     2: {"Type": "Special", "Hot": "A", "Special": "Class VI", "Unusual": "Peculiar", "Giants": "Class III", "Peculiar": "Black Hole"},
     3: {"Type": "M", "Hot": "A", "Special": "Class VI", "Unusual": "Class VI", "Giants": "Class III", "Peculiar": "Pulsar"},
@@ -30,17 +34,14 @@ star_subtype = {
     12: {"Numeric": 0, "M-type": 9},
 }
 
-print("BEM VINDO ao gerador de mundos e sistemas de traveller! Usando de base o core e o World Builders Handbook")
-usuario = input("pronto pra começar? y pra sim, n pra nao ")
-
 def roll_2d():
     return random.randint(1, 6) + random.randint(1, 6)
 
 def Greador():
     print("gerando estrela...")
     dado = roll_2d()
+    global classe_estrela
     print(f"Rolagem inicial: {dado}")
-    
     estrela = star_types[dado]
     if dado <= 2:
         print("sistema especial!")
@@ -48,14 +49,18 @@ def Greador():
         estrela_especial = star_types[dado]
         print(f"a estrela especial é {estrela_especial['Special']}")
         dado = roll_2d() + 1
-        if  estrela_especial['Special'] ==  "Class IV" and 3 <= dado <= 6:
-            dado = dado + 5
-        else:
+        if estrela_especial['Special'] == "Giants":
             estrela = star_types[dado]
-            if  estrela_especial['Special'] ==  "Class VI" and estrela['Type'] == "F":
-                estrela['Type'] = "G"
+            dado = roll_2d() + 1
+            estrela_especial = star_types[dado]
+            classe_estrela = estrela_especial['Giants']
+            print(f"Estrela do tipo: {estrela['Type']} {estrela_especial['Giants']}")  
+        elif  estrela_especial['Special'] ==  "Class IV" and 3 <= dado <= 6:
+            dado = dado + 5
+            estrela = star_types[dado]
             print(f"Estrela do tipo: {estrela['Type']} {estrela_especial['Special']}")
-        if dado >= 12:
+            classe_estrela = estrela_especial['Special']
+        elif dado >= 12:
             print("HOT!")
             dado = roll_2d()
             estrela = star_types[dado]
@@ -66,6 +71,14 @@ def Greador():
                 estrela['HOT'] = "B"
             print(f"Estrela do tipo: {estrela['Hot']} {estrela_especial['Special']}")
             estrela["Type"] = estrela['Hot']
+            classe_estrela = estrela_especial['Special']
+        else:
+            estrela = star_types[dado]
+            if  estrela_especial['Special'] ==  "Class VI" and estrela['Type'] == "F":
+                estrela['Type'] = "G"
+            print(f"Estrela do tipo: {estrela['Type']} {estrela_especial['Special']}")
+            classe_estrela = estrela_especial['Special']
+            
     elif dado >= 12:
         print("HOT!")
         dado = roll_2d()
@@ -76,13 +89,18 @@ def Greador():
         print(f"Estrela do tipo: {estrela['Type']}")
     print("Clculando Subtype...")
     dado = roll_2d()
+    print("dado subtype: ",dado)
     sub_tipo = star_subtype[dado]
     if estrela["Type"] == "M":
-        print(f"sua estrela é {estrela['Type']}{sub_tipo['M-type']}")
-        estrela_final.update({"Type":estrela['Type'], "Subtype":sub_tipo['M-type']})
+        print(f"sua estrela é {estrela['Type']}{sub_tipo['M-type']} {classe_estrela}")
+        estrela_final.update({"Type":estrela['Type'], "Subtype":sub_tipo['M-type'],"Class": classe_estrela})
+    elif estrela["Type"] == "K" and sub_tipo['Numeric'] > 4 and classe_estrela == "Class IV":
+        sub_tipo['Numeric'] = sub_tipo['Numeric'] - 5
+        print(f"sua estrela é {estrela['Type']}{sub_tipo['Numeric']} {classe_estrela}")
+        estrela_final.update({"Type":estrela['Type'], "Subtype":sub_tipo['Numeric'],"Class": classe_estrela})
     else:
-        print(f"sua estrela é {estrela['Type']}{sub_tipo['Numeric']}")
-        estrela_final.update({"Type":estrela['Type'], "Subtype":sub_tipo['Numeric']})
+        print(f"sua estrela é {estrela['Type']}{sub_tipo['Numeric']} {classe_estrela}")
+        estrela_final.update({"Type":estrela['Type'], "Subtype":sub_tipo['Numeric'],"Class": classe_estrela})
 
 
 
