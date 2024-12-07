@@ -14,6 +14,19 @@ star_types = {
     11: {"Type": "F", "Hot": "B", "Special": "Giants", "Unusual": "Class III", "Giants": "Class Ib", "Peculiar": "Anomaly"},
     12: {"Type": "Hot", "Hot": "O", "Special": "Giants", "Unusual": "Giants", "Giants": "Class Ia", "Peculiar": "Anomaly"},
 }
+star_subtype = {
+    2: {"Numeric": 0, "M-type": 8},
+    3: {"Numeric": 1, "M-type": 6},
+    4: {"Numeric": 3, "M-type": 5},
+    5: {"Numeric": 5, "M-type": 4},
+    6: {"Numeric": 7, "M-type": 0},
+    7: {"Numeric": 9, "M-type": 2},
+    8: {"Numeric": 8, "M-type": 1},
+    9: {"Numeric": 6, "M-type": 3},
+    10: {"Numeric": 4, "M-type": 5},
+    11: {"Numeric": 2, "M-type": 7},
+    12: {"Numeric": 0, "M-type": 9},
+}
 
 print("BEM VINDO ao gerador de mundos e sistemas de traveller! Usando de base o core e o World Builders Handbook")
 usuario = input("pronto pra começar? y pra sim, n pra nao ")
@@ -44,16 +57,30 @@ def Greador():
             print("HOT!")
             dado = roll_2d()
             estrela = star_types[dado]
+            if  estrela_especial['Special'] ==  "Class IV" and estrela['HOT'] == "O" :
+                estrela['HOT'] = "B"
+
             if  estrela_especial['Special'] ==  "Class VI" and estrela['HOT'] == "A" :
                 estrela['HOT'] = "B"
             print(f"Estrela do tipo: {estrela['Hot']} {estrela_especial['Special']}")
+            estrela["Type"] = estrela['Hot']
     elif dado >= 12:
         print("HOT!")
         dado = roll_2d()
         estrela = star_types[dado]
         print(f"Estrela do tipo: {estrela['Hot']}")
+        estrela["Type"] = estrela['Hot']
     else:
         print(f"Estrela do tipo: {estrela['Type']}")
+    print("Clculando Subtype...")
+    dado = roll_2d()
+    sub_tipo = star_subtype[dado]
+    if estrela["Type"] == "M":
+        print(f"sua estrela é {estrela['Type']}{sub_tipo['M-Type']}")
+    else:
+     print(f"sua estrela é {estrela['Type']}{sub_tipo['Numeric']}")
+
+
 
 if usuario == "y":
     Greador()
