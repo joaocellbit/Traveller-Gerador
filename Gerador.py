@@ -33,8 +33,20 @@ def Greador():
         estrela_especial = star_types[dado]
         print(f"a estrela especial é {estrela_especial['Special']}")
         dado = roll_2d() + 1
-        estrela = star_types[dado]
-        print(f"Estrela do tipo: {estrela['Type']}")
+        if  estrela_especial['Special'] ==  "Class IV" and 3 <= dado <= 6:
+            dado = dado + 5
+        else:
+            estrela = star_types[dado]
+            if  estrela_especial['Special'] ==  "Class VI" and estrela['Type'] == "F":
+                estrela['Type'] = "G"
+            print(f"Estrela do tipo: {estrela['Type']} {estrela_especial['Special']}")
+        if dado >= 12:
+            print("HOT!")
+            dado = roll_2d()
+            estrela = star_types[dado]
+            if  estrela_especial['Special'] ==  "Class VI" and estrela['HOT'] == "A" :
+                estrela['HOT'] = "B"
+            print(f"Estrela do tipo: {estrela['Hot']} {estrela_especial['Special']}")
     elif dado >= 12:
         print("HOT!")
         dado = roll_2d()
