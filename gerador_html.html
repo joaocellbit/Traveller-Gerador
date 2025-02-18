@@ -2,7 +2,7 @@
 <html lang="pt">
 <head>
   <meta charset="UTF-8">
-  <title>Geração de Sistemas – Estrelas, Planetas e Planetoid Belts</title>
+  <title>Geração de Sistemas – Estrelas, Planetas, Belts e Visualização Interativa (Órbitas Oficiais)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -41,12 +41,25 @@
     .mainworld {
       background-color: #ccffcc;
     }
+    /* Para o SVG */
+    .solar-system-svg {
+      border: 1px solid #ccc;
+      background: #000; /* fundo preto para simular espaço */
+      margin-bottom: 20px;
+      display: block;
+    }
   </style>
 </head>
 <body>
-  <h1>Geração de Sistemas – Estrelas, Planetas e Planetoid Belts</h1>
+  <h1>Geração de Sistemas – Estrelas, Planetas, Belts e Visualização Interativa (Órbitas Oficiais)</h1>
   <p>
-    Este exemplo integra as regras de criação de estrelas (com subtipo, conforme o World Builder’s Handbook), a geração de planetas e, agora, a inclusão de planetoid belts. Os belts são determinados pela rolagem 2D (resultado ≥ 8 indica belt) e, se presentes, a quantidade é definida através de uma rolagem 2D+DM (DM+1 se houver gas giants e +1 se houver estrelas secundárias). Os belts aparecem na tabela como um tipo especial ("Planetoid Belt").
+    Este código gera sistemas com informações de estrelas, planetas e belts. As distâncias orbitais dos planetas são calculadas seguindo as regras oficiais do World Builder’s Handbook, usando um valor mínimo (MAO = 0.61 UA) e um baseline (3.1 UA) para determinar o spread entre órbitas, de forma que:
+    <br>
+    • Número de slots = 1D6 + 2  
+    • spread = (3.1 – 0.61) / (N – 1)  
+    • Distância da órbita = 0.61 + (slotIndex – 1) × spread  
+    <br>
+    A escala do SVG é apenas ilustrativa. (&#8203;:contentReference[oaicite:1]{index=1})
   </p>
   <label for="numSystems">Número de sistemas:</label>
   <input type="number" id="numSystems" value="1" min="1">
@@ -66,6 +79,72 @@
       return total;
     }
 
+    // Converte 'atmosphere' (0..15) em pressão aproximada em bar
+    function atmosphereToBar(atmo) {
+      if (atmo <= 0) return 0.01;
+      if (atmo >= 10) return 10;
+      return atmo * 0.2;
+    }
+
+    // Determina o albedo conforme as regras do Handbook, com variação
+    function determineAlbedo(planet) {
+      let baseAlbedo = 0.3;
+      if (planet.planetType === "Gas Giant") {
+        baseAlbedo = 0.3 + ((rollDice(1,6) - 3) * 0.05);
+        if (baseAlbedo < 0.2) baseAlbedo = 0.2;
+        if (baseAlbedo > 0.5) baseAlbedo = 0.5;
+      } else if (planet.biome === "Deserto" || planet.biome === "Árido") {
+        baseAlbedo = 0.2 + ((rollDice(1,6) - 3) * 0.02);
+      } else if (planet.biome === "Oceânico" || planet.biome === "Tundra") {
+        baseAlbedo = 0.3 + ((rollDice(1,6) - 3) * 0.03);
+      } else if (planet.biome === "Temperado" || planet.biome === "Tropical") {
+        baseAlbedo = 0.3 + ((rollDice(1,6) - 3) * 0.02);
+      } else if (planet.planetType === "Planetoid Belt") {
+        baseAlbedo = 0.2 + ((rollDice(1,6) - 3) * 0.03);
+        if (baseAlbedo < 0.1) baseAlbedo = 0.1;
+        if (baseAlbedo > 0.3) baseAlbedo = 0.3;
+      } else {
+        baseAlbedo = 0.3;
+      }
+      let adjust = rollDice(1,6) - 1;
+      baseAlbedo -= (0.02 * adjust);
+      if (baseAlbedo < 0.05) baseAlbedo = 0.05;
+      if (baseAlbedo > 0.95) baseAlbedo = 0.95;
+      return parseFloat(baseAlbedo.toFixed(2));
+    }
+
+    // Determina greenhouse factor conforme as regras oficiais
+    function determineGreenhouse(planet) {
+      let bar = atmosphereToBar(planet.atmosphere);
+      let gh = 0.5 * Math.sqrt(bar);
+      if ((planet.atmosphere >= 1 && planet.atmosphere <= 9) || planet.atmosphere === 13 || planet.atmosphere === 14) {
+        let extra = 0;
+        for (let i = 0; i < 3; i++) {
+          extra += (rollDice(1,6) * 0.01);
+        }
+        gh += extra;
+      }
+      if ([11,12,16,17].includes(planet.atmosphere)) {
+        let extra2 = rollDice(1,6) - 1;
+        if (extra2 < 0) extra2 = 0;
+        gh += extra2;
+        if (gh < 0.5) gh = 0.5;
+      }
+      return parseFloat(gh.toFixed(2));
+    }
+
+    // Cálculo final da temperatura média
+    function computeMeanTemperature(planet, starLuminosity) {
+      if (planet.planetType === "Planetoid Belt") return "N/A";
+      if (starLuminosity <= 0) return "N/A";
+      let albedo = determineAlbedo(planet);
+      let greenhouse = determineGreenhouse(planet);
+      let factor = (starLuminosity * (1 - albedo) * (1 + greenhouse)) / Math.pow(planet.orbit, 2);
+      let temp = 279 * Math.pow(factor, 0.25);
+      return temp.toFixed(1);
+    }
+
+    // Determina a zona habitável
     function calcHabZone(lum) {
       if (lum <= 0) return "N/A";
       let innerHZ = Math.sqrt(lum / 1.51);
@@ -73,46 +152,74 @@
       return `${innerHZ.toFixed(2)} - ${outerHZ.toFixed(2)} AU`;
     }
 
-    function getOrbitMultiplier() {
-      let r = rollDice(2, 6);
-      const mapping = {2: 1.2, 3: 1.3, 4: 1.4, 5: 1.5, 6: 1.6, 7: 1.7, 8: 1.8, 9: 1.9, 10: 2.0, 11: 2.1, 12: 2.2};
-      return mapping[r];
+    // ----------------------------------------------------
+    // GERAÇÃO DE ÓRBITAS SEGUNDO REGRAS OFICIAIS
+    // ----------------------------------------------------
+    // Aqui usamos os valores oficiais:
+    // MAO = 0.61 UA, baseline = 3.1 UA e o spread é calculado como (3.1 - 0.61) / (N - 1)
+    function generateOrbitSlots() {
+      let numSlots = rollDice(1,6) + 2; // Número de órbitas: de 3 a 8
+      let slots = [];
+      let MAO = 0.61;      // Distância mínima
+      let baseline = 3.1;  // Baseline teórico
+      let spread = (baseline - MAO) / (numSlots - 1);
+      for (let i = 0; i < numSlots; i++) {
+        let orbitDistance = MAO + i * spread;
+        slots.push(new OrbitSlot(i+1, orbitDistance));
+      }
+      return slots;
+    }
+
+    // Classe OrbitSlot
+    class OrbitSlot {
+      constructor(index, distanceAU) {
+        this.index = index;
+        this.distanceAU = distanceAU;
+        this.planetType = null;
+      }
     }
 
     function generateAxialTilt() {
-      let roll = rollDice(2, 6);
+      let roll = rollDice(2,6);
       let tilt = 0;
       if (roll >= 2 && roll <= 4) {
-        let oneDie = rollDice(1, 6);
+        let oneDie = rollDice(1,6);
         tilt = (oneDie - 1) / 50;
       } else if (roll === 5) {
-        let oneDie = rollDice(1, 6);
+        let oneDie = rollDice(1,6);
         tilt = oneDie / 5;
       } else if (roll === 6) {
-        tilt = rollDice(1, 6);
+        tilt = rollDice(1,6);
       } else if (roll === 7) {
-        tilt = 6 + rollDice(1, 6);
+        tilt = 6 + rollDice(1,6);
       } else if (roll === 8 || roll === 9) {
-        tilt = 5 + rollDice(1, 6) * 5;
+        tilt = 5 + rollDice(1,6) * 5;
       } else {
-        let extremeRoll = rollDice(1, 6);
+        let extremeRoll = rollDice(1,6);
         if (extremeRoll <= 2) {
-          tilt = 10 + rollDice(1, 6) * 10;
+          tilt = 10 + rollDice(1,6) * 10;
         } else if (extremeRoll === 3) {
-          tilt = 30 + rollDice(1, 6) * 10;
+          tilt = 30 + rollDice(1,6) * 10;
         } else if (extremeRoll === 4) {
-          tilt = 90 + rollDice(1, 6);
+          tilt = 90 + rollDice(1,6);
         } else if (extremeRoll === 5) {
-          tilt = 180 - rollDice(1, 6);
+          tilt = 180 - rollDice(1,6);
         } else {
-          tilt = 120 + rollDice(1, 6) * 10;
+          tilt = 120 + rollDice(1,6) * 10;
         }
       }
       return tilt;
     }
 
+    function toHex(value) {
+      const hexDigits = "0123456789ABCDEF";
+      if (value < 0) value = 0;
+      if (value > 15) value = 15;
+      return hexDigits[value];
+    }
+
     // ----------------------------------------------------
-    // FUNÇÃO DE SUBTIPO (Numeric vs. M-type)
+    // SUBTIPO E TABELA PRINCIPAL (para as estrelas)
     // ----------------------------------------------------
     function determineSubtype(starType, isPrimary) {
       const validTypes = ["O","B","A","F","G","K","M"];
@@ -131,9 +238,6 @@
       }
     }
 
-    // ----------------------------------------------------
-    // TABELA PRIMARY STAR TYPES (simplificada)
-    // ----------------------------------------------------
     function determinePrimaryStarTypeDM() {
       return 0;
     }
@@ -164,11 +268,11 @@
       if (r <= 3) return "Class VI";
       else if (r <= 5) return "BD"; 
       else if (r <= 7) return "D";  
-      else return "Class VI"; 
+      else return "Class VI";
     }
 
     // ----------------------------------------------------
-    // CLASSE STAR – GERAÇÃO COMPLETA (incluindo subtipo)
+    // ESTRELA (Star)
     // ----------------------------------------------------
     class Star {
       constructor(nome = "Primária") {
@@ -304,10 +408,10 @@
     }
 
     // ----------------------------------------------------
-    // FUNÇÕES PARA PLANETAS E PLANETOID BELTS
+    // GERAÇÃO DE PLANETAS E BELTS
     // ----------------------------------------------------
     function checkGasGiantExistenceAndQuantity(star, starCount) {
-      let rollExist = rollDice(2, 6);
+      let rollExist = rollDice(2,6);
       if (rollExist < 2) return 0;
       let quantityDM = 0;
       if (star.luminosityClass === "V" && starCount === 1) quantityDM += 1;
@@ -321,33 +425,6 @@
       return 6;
     }
 
-    class OrbitSlot {
-      constructor(index, distanceAU) {
-        this.index = index;
-        this.distanceAU = distanceAU;
-        this.planetType = null;
-      }
-    }
-
-    function generateOrbitSlots() {
-      let orbitCount = rollDice(2,6) + 2;
-      let slots = [];
-      let baseOrbit = 0.2;
-      let currentDist = baseOrbit;
-      for (let i = 1; i <= orbitCount; i++) {
-        slots.push(new OrbitSlot(i, currentDist));
-        currentDist *= getOrbitMultiplier();
-      }
-      return slots;
-    }
-
-    function toHex(value) {
-      const hexDigits = "0123456789ABCDEF";
-      if (value < 0) value = 0;
-      if (value > 15) value = 15;
-      return hexDigits[value];
-    }
-
     class Planet {
       constructor(index, planetType, orbitAU) {
         this.index = index;
@@ -355,7 +432,6 @@
         this.planetType = planetType;
         this.numMoons = Math.floor(Math.random() * 6);
         this.isMainworld = false;
-        
         if (planetType === "Gas Giant") {
           this.size = Math.floor(Math.random() * 3) + 8;
           this.atmosphere = 0;
@@ -364,7 +440,6 @@
           this.temperature = Math.floor(Math.random() * 151) + 50;
           this.mass = parseFloat((Math.random() * 200 + 100).toFixed(2));
         } else if (planetType === "Planetoid Belt") {
-          // Propriedades especiais para belts
           this.size = 0;
           this.atmosphere = 0;
           this.hydrographics = 0;
@@ -372,7 +447,6 @@
           this.temperature = 0;
           this.mass = 0;
         } else {
-          // Terrestres
           this.size = Math.floor(Math.random() * 11);
           this.atmosphere = Math.floor(Math.random() * 16);
           this.hydrographics = Math.floor(Math.random() * 11);
@@ -380,11 +454,9 @@
           this.temperature = Math.floor(Math.random() * 251) + 100;
           this.mass = parseFloat((Math.random() * (10 - 0.1) + 0.1).toFixed(2));
         }
-
         this.dayLength = parseFloat((Math.random() * (72 - 10) + 10).toFixed(2));
         this.axialTilt = generateAxialTilt();
         this.orbitalPeriod = 0;
-
         if (planetType === "Terrestrial (Inhabited)") {
           this.population = Math.floor(Math.random() * 13);
           if (this.population === 0) this.population = 1;
@@ -403,7 +475,6 @@
           this.culture = "N/A";
           this.economy = "N/A";
         }
-
         if (planetType === "Gas Giant" || planetType === "Planetoid Belt") {
           this.biome = planetType;
         } else {
@@ -429,8 +500,9 @@
         }
       }
 
-      toTableRow() {
+      toTableRow(starLuminosity) {
         let rowClass = this.isMainworld ? 'mainworld' : '';
+        let meanTemp = computeMeanTemperature(this, starLuminosity);
         return `<tr class="${rowClass}">
           <td>${this.index}</td>
           <td>${this.orbit.toFixed(2)}</td>
@@ -449,20 +521,14 @@
           <td>${this.culture}</td>
           <td>${this.economy}</td>
           <td>${this.biome}</td>
+          <td>${meanTemp}</td>
         </tr>`;
       }
     }
 
-    // ----------------------------------------------------
-    // FUNÇÃO PARA GERAR PLANETOID BELTS
-    // ----------------------------------------------------
-    // As regras: rola 2D; se resultado ≥ 8, belts existem.
-    // Em caso afirmativo, rola 2D+DM para determinar quantidade:
-    // • ≤ 6 → 1 belt; 7–11 → 2 belts; 12+ → 3 belts.
-    // Modificadores: +1 se houver gas giants, +1 se houver estrela secundária.
     function generatePlanetoidBelts(system) {
       let rollForBelt = rollDice(2,6);
-      if (rollForBelt < 8) return []; // Não há belts
+      if (rollForBelt < 8) return [];
       let DM = 0;
       let gasGiantCount = system.planets.filter(p => p.planetType === "Gas Giant").length;
       if (gasGiantCount > 0) DM += 1;
@@ -473,29 +539,9 @@
       else if (beltRoll <= 11) beltCount = 2;
       else beltCount = 3;
       let belts = [];
-      // Posiciona os belts logo após a órbita mais externa
       let maxOrbit = Math.max(...system.orbitSlots.map(s => s.distanceAU));
       for (let i = 0; i < beltCount; i++) {
         let belt = new Planet(system.planets.length + 1, "Planetoid Belt", 0);
-        belt.size = 0;
-        belt.atmosphere = 0;
-        belt.hydrographics = 0;
-        belt.gravity = 0;
-        belt.temperature = 0;
-        belt.mass = 0;
-        belt.dayLength = 0;
-        belt.axialTilt = 0;
-        belt.orbitalPeriod = 0;
-        belt.population = 0;
-        belt.government = 0;
-        belt.lawLevel = 0;
-        belt.techLevel = 0;
-        belt.starport = "X";
-        belt.culture = "N/A";
-        belt.economy = "N/A";
-        belt.biome = "Planetoid Belt";
-        belt.generateUWP = function() { return "Planetoid Belt"; };
-        // Atribui órbita: posiciona cada belt em intervalos além do maior slot
         belt.orbit = maxOrbit + (i + 1) * (Math.random() * 0.5 + 0.5);
         belts.push(belt);
       }
@@ -503,7 +549,90 @@
     }
 
     // ----------------------------------------------------
-    // CLASSE SOLARSYSTEM – INTEGRA ESTRELAS, PLANETAS E BELTS
+    // FUNÇÃO QUE CRIA O SVG INTERATIVO
+    // ----------------------------------------------------
+    function createSystemSVG(solarSystem) {
+      let width = 600, height = 600;
+      let centerX = width / 2, centerY = height / 2;
+      let maxOrbit = 0;
+      solarSystem.planets.forEach(p => {
+        if (p.orbit > maxOrbit) maxOrbit = p.orbit;
+      });
+      if (maxOrbit < 0.1) maxOrbit = 0.1;
+      let maxRadius = 250;
+      let scale = maxRadius / maxOrbit;
+      let svg = `<svg class="solar-system-svg" width="${width}" height="${height}">`;
+      let starColor = solarSystem.primaryStar.color.toLowerCase();
+      let starRadius = 10;
+      svg += `
+        <circle cx="${centerX}" cy="${centerY}" r="${starRadius}" fill="${mapColor(starColor)}">
+          <title>${solarSystem.primaryStar.nome} (${solarSystem.primaryStar.finalType})</title>
+        </circle>
+      `;
+      let offset = 20;
+      solarSystem.secondaryStars.forEach((sec, idx) => {
+        let secColor = sec.color.toLowerCase();
+        svg += `
+          <circle cx="${centerX + (offset * (idx + 1))}" cy="${centerY}" r="8" fill="${mapColor(secColor)}">
+            <title>${sec.nome} (${sec.finalType})</title>
+          </circle>
+        `;
+      });
+      solarSystem.planets.forEach(planet => {
+        let rOrbit = planet.orbit * scale;
+        let orbitColor = "#555";
+        svg += `
+          <circle cx="${centerX}" cy="${centerY}" r="${rOrbit}" fill="none" stroke="${orbitColor}" stroke-width="1" opacity="0.5"></circle>
+        `;
+        let angle = Math.random() * 2 * Math.PI;
+        let px = centerX + rOrbit * Math.cos(angle);
+        let py = centerY + rOrbit * Math.sin(angle);
+        let planetRadius = 4;
+        if (planet.planetType === "Gas Giant") {
+          planetRadius = 6;
+        } else if (planet.planetType === "Planetoid Belt") {
+          planetRadius = 2;
+        } else if (planet.isMainworld) {
+          planetRadius = 5;
+        }
+        let planetColor = "#f00";
+        if (planet.planetType === "Gas Giant") {
+          planetColor = "#00f";
+        } else if (planet.planetType === "Planetoid Belt") {
+          planetColor = "#999";
+        } else if (planet.isMainworld) {
+          planetColor = "#0f0";
+        }
+        svg += `
+          <circle cx="${px}" cy="${py}" r="${planetRadius}" fill="${planetColor}">
+            <title>
+              ${planet.planetType} (Órbita: ${planet.orbit.toFixed(2)} UA)
+              UWP: ${planet.generateUWP()}
+            </title>
+          </circle>
+        `;
+      });
+      svg += `</svg>`;
+      return svg;
+    }
+
+    function mapColor(colorName) {
+      switch(colorName) {
+        case "azul": return "#00f";
+        case "azul-branco": return "#aaf";
+        case "branco": return "#fff";
+        case "amarelo-branco": return "#ff9";
+        case "amarelo": return "#ff0";
+        case "laranja": return "orange";
+        case "vermelho": return "red";
+        case "marrom-escuro": return "#663300";
+        case "branco-azulado": return "#ccf";
+        default: return "#fff";
+      }
+    }
+
+    // ----------------------------------------------------
+    // CLASSE SOLARSYSTEM
     // ----------------------------------------------------
     class SolarSystem {
       constructor(index) {
@@ -515,14 +644,13 @@
         }
         let starCount = 1 + this.secondaryStars.length;
         let ggCount = checkGasGiantExistenceAndQuantity(this.primaryStar, starCount);
+        // Gera órbitas seguindo as regras oficiais
         this.orbitSlots = generateOrbitSlots();
-
         if (ggCount > 0) {
           let shuffled = [...this.orbitSlots].sort(() => Math.random() - 0.5);
           let ggSlots = shuffled.slice(0, ggCount);
           ggSlots.forEach(s => s.planetType = "Gas Giant");
         }
-
         this.planets = [];
         let planetIndex = 1;
         for (let slot of this.orbitSlots) {
@@ -532,7 +660,7 @@
             planetIndex++;
           } else {
             if (rollDice(1,6) >= 4) {
-              let r = Math.floor(Math.random()*100) + 1;
+              let r = Math.floor(Math.random() * 100) + 1;
               let pType = (r <= 60) ? "Terrestrial (Barren)" : "Terrestrial (Inhabited)";
               let pl = new Planet(planetIndex, pType, slot.distanceAU);
               this.planets.push(pl);
@@ -540,18 +668,12 @@
             }
           }
         }
-
-        // Adiciona planetoid belts
         let belts = generatePlanetoidBelts(this);
         belts.forEach(b => { this.planets.push(b); });
-
-        // Calcula período orbital
         this.planets.forEach(p => {
           let periodYears = Math.sqrt(Math.pow(p.orbit,3) / this.primaryStar.mass);
           p.orbitalPeriod = Math.round(periodYears * 365.25);
         });
-
-        // Determina mainworld
         let L = this.primaryStar.luminosity;
         let innerHZ = Math.sqrt(L / 1.51);
         let outerHZ = Math.sqrt(L / 0.54);
@@ -568,7 +690,6 @@
           }
         }
         if (mainPlanet) mainPlanet.isMainworld = true;
-
         this.planets.sort((a,b) => a.orbit - b.orbit);
         for (let i = 0; i < this.planets.length; i++) {
           this.planets[i].index = i + 1;
@@ -623,14 +744,19 @@
               <th>Cultura</th>
               <th>Economia</th>
               <th>Bioma</th>
+              <th>Temperatura Média (K)</th>
             </tr>
           </thead>
           <tbody>`;
         this.planets.forEach(pl => {
-          html += pl.toTableRow();
+          html += pl.toTableRow(this.primaryStar.luminosity);
         });
         html += "</tbody></table>";
         return html;
+      }
+
+      generateSystemDiagram() {
+        return createSystemSVG(this);
       }
 
       toHTML() {
@@ -641,6 +767,8 @@
             ${this.generateStarsTable()}
             <h3>Planetas e Planetoid Belts</h3>
             ${this.generatePlanetsTable()}
+            <h3>Visualização do Sistema</h3>
+            ${this.generateSystemDiagram()}
           </div>
         `;
       }
