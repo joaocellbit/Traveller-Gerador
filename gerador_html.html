@@ -2,7 +2,7 @@
 <html lang="pt">
 <head>
   <meta charset="UTF-8">
-  <title>Geração de Sistemas – Estrelas, Planetas, Belts e Visualização Interativa (Órbitas Oficiais)</title>
+  <title>Geração de Sistemas – Estrelas, Planetas, Belts e Visualização (Regras Oficiais + Estações)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -51,15 +51,11 @@
   </style>
 </head>
 <body>
-  <h1>Geração de Sistemas – Estrelas, Planetas, Belts e Visualização Interativa (Órbitas Oficiais)</h1>
+  <h1>Geração de Sistemas – Estrelas, Planetas, Belts e Visualização (Regras Oficiais + Estações)</h1>
   <p>
-    Este código gera sistemas com informações de estrelas, planetas e belts. As distâncias orbitais dos planetas são calculadas seguindo as regras oficiais do World Builder’s Handbook, usando um valor mínimo (MAO = 0.61 UA) e um baseline (3.1 UA) para determinar o spread entre órbitas, de forma que:
-    <br>
-    • Número de slots = 1D6 + 2  
-    • spread = (3.1 – 0.61) / (N – 1)  
-    • Distância da órbita = 0.61 + (slotIndex – 1) × spread  
-    <br>
-    A escala do SVG é apenas ilustrativa. (&#8203;:contentReference[oaicite:1]{index=1})
+    Este código gera sistemas com informações de estrelas, planetas e belts, seguindo as regras oficiais para órbitas (MAO=0.61, baseline=3.1) 
+    e agora inclui um cálculo de variação sazonal e latitudinal de temperatura baseado em sin/cos da inclinação axial, conforme descrito no 
+    World Builder’s Handbook.
   </p>
   <label for="numSystems">Número de sistemas:</label>
   <input type="number" id="numSystems" value="1" min="1">
@@ -79,14 +75,12 @@
       return total;
     }
 
-    // Converte 'atmosphere' (0..15) em pressão aproximada em bar
     function atmosphereToBar(atmo) {
       if (atmo <= 0) return 0.01;
       if (atmo >= 10) return 10;
       return atmo * 0.2;
     }
 
-    // Determina o albedo conforme as regras do Handbook, com variação
     function determineAlbedo(planet) {
       let baseAlbedo = 0.3;
       if (planet.planetType === "Gas Giant") {
@@ -103,8 +97,6 @@
         baseAlbedo = 0.2 + ((rollDice(1,6) - 3) * 0.03);
         if (baseAlbedo < 0.1) baseAlbedo = 0.1;
         if (baseAlbedo > 0.3) baseAlbedo = 0.3;
-      } else {
-        baseAlbedo = 0.3;
       }
       let adjust = rollDice(1,6) - 1;
       baseAlbedo -= (0.02 * adjust);
@@ -113,7 +105,6 @@
       return parseFloat(baseAlbedo.toFixed(2));
     }
 
-    // Determina greenhouse factor conforme as regras oficiais
     function determineGreenhouse(planet) {
       let bar = atmosphereToBar(planet.atmosphere);
       let gh = 0.5 * Math.sqrt(bar);
@@ -133,10 +124,22 @@
       return parseFloat(gh.toFixed(2));
     }
 
-    // Cálculo final da temperatura média
+    // ----------------------------------------------------
+    // 1) Temperatura base (sem efeito estufa)
+    // ----------------------------------------------------
+    function computeBaseTemperature(planet, starLuminosity) {
+      if (planet.planetType === "Planetoid Belt" || starLuminosity <= 0) return "N/A";
+      let albedo = determineAlbedo(planet);
+      let factor = (starLuminosity * (1 - albedo)) / Math.pow(planet.orbit, 2);
+      let T_base = 279 * Math.pow(factor, 0.25);
+      return T_base.toFixed(1);
+    }
+
+    // ----------------------------------------------------
+    // 2) Temperatura final (com efeito estufa)
+    // ----------------------------------------------------
     function computeMeanTemperature(planet, starLuminosity) {
-      if (planet.planetType === "Planetoid Belt") return "N/A";
-      if (starLuminosity <= 0) return "N/A";
+      if (planet.planetType === "Planetoid Belt" || starLuminosity <= 0) return "N/A";
       let albedo = determineAlbedo(planet);
       let greenhouse = determineGreenhouse(planet);
       let factor = (starLuminosity * (1 - albedo) * (1 + greenhouse)) / Math.pow(planet.orbit, 2);
@@ -144,7 +147,54 @@
       return temp.toFixed(1);
     }
 
-    // Determina a zona habitável
+    // ----------------------------------------------------
+    // 3) Regras Oficiais p/ estações: sin(axial tilt), cos(fração do ano)
+    // ----------------------------------------------------
+    // Exemplo: dayOfYear=0 => equinócio. Se quisermos ver "verão", usar dayOfYear= localYearDays/4, etc.
+    function computeSeasonalVariationsOfficial(planet, meanTemp, dayOfYear=0) {
+      if (meanTemp === "N/A") {
+        return {
+          eqSummer: "N/A", eqWinter: "N/A",
+          poleSummer: "N/A", poleWinter: "N/A"
+        };
+      }
+      let tiltDeg = planet.axialTilt; 
+      let tiltRad = tiltDeg * (Math.PI / 180); 
+      // Basic Axial Tilt Factor = sin(axialTilt)
+      let basicTiltFactor = Math.sin(tiltRad);
+
+      // Fração do ano decorrido (0..1)
+      let localYearDays = planet.orbitalPeriod || 365; 
+      let fractionOfYear = dayOfYear / localYearDays; 
+      // Converte fração em ângulo p/ cos()
+      let angleDeg = fractionOfYear * 360;
+      let angleRad = angleDeg * (Math.PI / 180);
+
+      // Seasonal Axial Tilt Factor
+      let seasonalAxialTiltFactor = Math.cos(angleRad) * basicTiltFactor;
+
+      // Convertemos esse fator em amplitude de temperatura
+      // Ex.: se tilt=90°, basicTiltFactor=1 => amplitude ±20 K (ajuste a gosto)
+      let maxAmplitude = 20; 
+      let offset = seasonalAxialTiltFactor * maxAmplitude; 
+
+      // Aplica menor variação no Equador, maior nos polos
+      // (você pode usar cos(latitude) ou outra equação do livro)
+      let baseMean = parseFloat(meanTemp);
+
+      // Ex.: Equador sofre ~ metade da amplitude
+      let eqSummer = (baseMean + offset * 0.5).toFixed(1);
+      let eqWinter = (baseMean - offset * 0.5).toFixed(1);
+
+      // Polos podem sofrer ~ amplitude total
+      let poleSummer = (baseMean + offset).toFixed(1);
+      let poleWinter = (baseMean - offset).toFixed(1);
+
+      return {
+        eqSummer, eqWinter, poleSummer, poleWinter
+      };
+    }
+
     function calcHabZone(lum) {
       if (lum <= 0) return "N/A";
       let innerHZ = Math.sqrt(lum / 1.51);
@@ -153,15 +203,13 @@
     }
 
     // ----------------------------------------------------
-    // GERAÇÃO DE ÓRBITAS SEGUNDO REGRAS OFICIAIS
+    // GERAÇÃO DE ÓRBITAS (regras oficiais)
     // ----------------------------------------------------
-    // Aqui usamos os valores oficiais:
-    // MAO = 0.61 UA, baseline = 3.1 UA e o spread é calculado como (3.1 - 0.61) / (N - 1)
     function generateOrbitSlots() {
-      let numSlots = rollDice(1,6) + 2; // Número de órbitas: de 3 a 8
+      let numSlots = rollDice(1,6) + 2; // 3..8
       let slots = [];
-      let MAO = 0.61;      // Distância mínima
-      let baseline = 3.1;  // Baseline teórico
+      let MAO = 0.61;
+      let baseline = 3.1;
       let spread = (baseline - MAO) / (numSlots - 1);
       for (let i = 0; i < numSlots; i++) {
         let orbitDistance = MAO + i * spread;
@@ -170,7 +218,6 @@
       return slots;
     }
 
-    // Classe OrbitSlot
     class OrbitSlot {
       constructor(index, distanceAU) {
         this.index = index;
@@ -219,22 +266,18 @@
     }
 
     // ----------------------------------------------------
-    // SUBTIPO E TABELA PRINCIPAL (para as estrelas)
+    // ESTRELAS
     // ----------------------------------------------------
     function determineSubtype(starType, isPrimary) {
       const validTypes = ["O","B","A","F","G","K","M"];
       if (!validTypes.includes(starType)) return "";
-      const mappingNumeric = {
-        2: 0, 3: 1, 4: 3, 5: 5, 6: 7, 7: 9, 8: 8, 9: 6, 10: 4, 11: 2, 12: 0
-      };
-      const mappingMTypePrimary = {
-        2: 8, 3: 6, 4: 5, 5: 4, 6: 0, 7: 2, 8: 1, 9: 3, 10: 5, 11: 7, 12: 9
-      };
+      const mappingNumeric = {2:0,3:1,4:3,5:5,6:7,7:9,8:8,9:6,10:4,11:2,12:0};
+      const mappingMTypePrimary = {2:8,3:6,4:5,5:4,6:0,7:2,8:1,9:3,10:5,11:7,12:9};
       let r = rollDice(2,6);
       if (starType === "M" && isPrimary) {
-        return mappingMTypePrimary[r] !== undefined ? mappingMTypePrimary[r] : 0;
+        return mappingMTypePrimary[r] ?? 0;
       } else {
-        return mappingNumeric[r] !== undefined ? mappingNumeric[r] : 0;
+        return mappingNumeric[r] ?? 0;
       }
     }
 
@@ -266,28 +309,22 @@
     function getSpecialColumn() {
       let r = rollDice(2,6);
       if (r <= 3) return "Class VI";
-      else if (r <= 5) return "BD"; 
-      else if (r <= 7) return "D";  
+      else if (r <= 5) return "BD";
+      else if (r <= 7) return "D";
       else return "Class VI";
     }
 
-    // ----------------------------------------------------
-    // ESTRELA (Star)
-    // ----------------------------------------------------
     class Star {
-      constructor(nome = "Primária") {
+      constructor(nome="Primária") {
         this.nome = nome;
         this.isPrimary = (nome === "Primária");
-
         this.initialRoll = rollDice(2,6) + determinePrimaryStarTypeDM();
         if (this.initialRoll < 2) this.initialRoll = 2;
         if (this.initialRoll > 12) this.initialRoll = 12;
-
         let typeResult = getTypeColumnResult(this.initialRoll);
-
-        this.finalType = null;     
-        this.luminosityClass = "V"; 
-        this.specialCategory = ""; 
+        this.finalType = null;
+        this.luminosityClass = "V";
+        this.specialCategory = "";
         this.subtype = "";
 
         if (typeResult === "Special") {
@@ -301,7 +338,7 @@
             this.luminosityClass = "D";
             this.specialCategory = "Post-Stellar";
           } else if (specialRes === "Class VI") {
-            this.finalType = "K"; 
+            this.finalType = "K";
             this.luminosityClass = "VI";
           } else {
             this.finalType = "M";
@@ -408,13 +445,15 @@
     }
 
     // ----------------------------------------------------
-    // GERAÇÃO DE PLANETAS E BELTS
+    // PLANETAS E BELTS
     // ----------------------------------------------------
     function checkGasGiantExistenceAndQuantity(star, starCount) {
       let rollExist = rollDice(2,6);
       if (rollExist < 2) return 0;
       let quantityDM = 0;
-      if (star.luminosityClass === "V" && starCount === 1) quantityDM += 1;
+      if (star.luminosityClass === "V" && starCount === 1) {
+        quantityDM += 1;
+      }
       let rollQty = rollDice(2,6) + quantityDM;
       if (rollQty <= 2) return 1;
       if (rollQty <= 4) return 1;
@@ -432,6 +471,7 @@
         this.planetType = planetType;
         this.numMoons = Math.floor(Math.random() * 6);
         this.isMainworld = false;
+
         if (planetType === "Gas Giant") {
           this.size = Math.floor(Math.random() * 3) + 8;
           this.atmosphere = 0;
@@ -450,13 +490,19 @@
           this.size = Math.floor(Math.random() * 11);
           this.atmosphere = Math.floor(Math.random() * 16);
           this.hydrographics = Math.floor(Math.random() * 11);
-          this.gravity = parseFloat((1 + (this.size - 5) * 0.1 + (Math.random() * 0.4 - 0.2)).toFixed(2));
+          this.gravity = parseFloat(
+            (1 + (this.size - 5) * 0.1 + (Math.random() * 0.4 - 0.2)).toFixed(2)
+          );
           this.temperature = Math.floor(Math.random() * 251) + 100;
-          this.mass = parseFloat((Math.random() * (10 - 0.1) + 0.1).toFixed(2));
+          this.mass = parseFloat(
+            (Math.random() * (10 - 0.1) + 0.1).toFixed(2)
+          );
         }
+
         this.dayLength = parseFloat((Math.random() * (72 - 10) + 10).toFixed(2));
         this.axialTilt = generateAxialTilt();
         this.orbitalPeriod = 0;
+
         if (planetType === "Terrestrial (Inhabited)") {
           this.population = Math.floor(Math.random() * 13);
           if (this.population === 0) this.population = 1;
@@ -475,6 +521,7 @@
           this.culture = "N/A";
           this.economy = "N/A";
         }
+
         if (planetType === "Gas Giant" || planetType === "Planetoid Belt") {
           this.biome = planetType;
         } else {
@@ -494,35 +541,94 @@
         } else if (this.planetType === "Terrestrial (Barren)") {
           return "Barren";
         } else if (this.planetType === "Terrestrial (Inhabited)") {
-          return `${this.starport}${toHex(this.size)}${toHex(this.atmosphere)}${toHex(this.hydrographics)}${toHex(this.population)}${toHex(this.government)}${toHex(this.lawLevel)}-${this.techLevel.toString().padStart(2,'0')}`;
+          return (
+            this.starport +
+            toHex(this.size) +
+            toHex(this.atmosphere) +
+            toHex(this.hydrographics) +
+            toHex(this.population) +
+            toHex(this.government) +
+            toHex(this.lawLevel) +
+            "-" +
+            this.techLevel.toString().padStart(2, "0")
+          );
         } else {
           return "Desconhecido";
         }
       }
 
       toTableRow(starLuminosity) {
-        let rowClass = this.isMainworld ? 'mainworld' : '';
+        let rowClass = this.isMainworld ? "mainworld" : "";
+
+        // 1) Temperatura base, greenhouse e média
+        let baseTemp = computeBaseTemperature(this, starLuminosity);
         let meanTemp = computeMeanTemperature(this, starLuminosity);
-        return `<tr class="${rowClass}">
-          <td>${this.index}</td>
-          <td>${this.orbit.toFixed(2)}</td>
-          <td>${this.numMoons}</td>
-          <td>${this.planetType}</td>
-          <td>${this.mass}</td>
-          <td>${this.gravity}</td>
-          <td>${this.dayLength}</td>
-          <td>${this.axialTilt.toFixed(2)}</td>
-          <td>${this.orbitalPeriod}</td>
-          <td>${this.population}</td>
-          <td>${this.government}</td>
-          <td>${this.lawLevel}</td>
-          <td>${this.techLevel}</td>
-          <td>${this.generateUWP()}</td>
-          <td>${this.culture}</td>
-          <td>${this.economy}</td>
-          <td>${this.biome}</td>
-          <td>${meanTemp}</td>
-        </tr>`;
+        let greenhouseDelta = "N/A";
+        if (meanTemp !== "N/A" && baseTemp !== "N/A") {
+          greenhouseDelta = (parseFloat(meanTemp) - parseFloat(baseTemp)).toFixed(1);
+        }
+
+        // 2) Escolhemos um dayOfYear (por exemplo 0 => equinócio)
+        // Se quiser ver "pico do verão", pode ser dayOfYear= orbitalPeriod/4
+        let dayOfYear = 0; 
+        let seasonal = computeSeasonalVariationsOfficial(this, meanTemp, dayOfYear);
+
+        return `
+          <tr class="${rowClass}">
+            <td>${this.index}</td>
+            <td>${this.orbit.toFixed(2)}</td>
+            <td>${this.numMoons}</td>
+            <td>${this.planetType}</td>
+            <td>${this.mass}</td>
+            <td>${this.gravity}</td>
+            <td>${this.dayLength}</td>
+            <td>${this.axialTilt.toFixed(2)}</td>
+            <td>${this.orbitalPeriod}</td>
+            <td>${this.population}</td>
+            <td>${this.government}</td>
+            <td>${this.lawLevel}</td>
+            <td>${this.techLevel}</td>
+            <td>${this.generateUWP()}</td>
+            <td>${this.culture}</td>
+            <td>${this.economy}</td>
+            <td>${this.biome}</td>
+            <td>
+              <!-- Temperatura Base / Greenhouse / Média -->
+              <table style="width:100%; border:none;">
+                <tr>
+                  <th style="border:none; padding:2px;">Base</th>
+                  <th style="border:none; padding:2px;">Greenhouse</th>
+                  <th style="border:none; padding:2px;">Média</th>
+                </tr>
+                <tr>
+                  <td style="border:none; padding:2px;">${baseTemp}</td>
+                  <td style="border:none; padding:2px;">${greenhouseDelta}</td>
+                  <td style="border:none; padding:2px;">${meanTemp}</td>
+                </tr>
+              </table>
+              <br>
+              <!-- Estaçoes: equador e polos (diaOfYear=0) -->
+              <table style="width:100%; border:none;">
+                <tr>
+                  <th colspan="2" style="border:none;">Equador</th>
+                  <th colspan="2" style="border:none;">Polo</th>
+                </tr>
+                <tr>
+                  <th style="border:none;">Verão</th>
+                  <th style="border:none;">Inverno</th>
+                  <th style="border:none;">Verão</th>
+                  <th style="border:none;">Inverno</th>
+                </tr>
+                <tr>
+                  <td style="border:none;">${seasonal.eqSummer}</td>
+                  <td style="border:none;">${seasonal.eqWinter}</td>
+                  <td style="border:none;">${seasonal.poleSummer}</td>
+                  <td style="border:none;">${seasonal.poleWinter}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        `;
       }
     }
 
@@ -549,7 +655,7 @@
     }
 
     // ----------------------------------------------------
-    // FUNÇÃO QUE CRIA O SVG INTERATIVO
+    // FUNÇÃO QUE CRIA O SVG INTERATIVO (igual)
     // ----------------------------------------------------
     function createSystemSVG(solarSystem) {
       let width = 600, height = 600;
@@ -644,13 +750,17 @@
         }
         let starCount = 1 + this.secondaryStars.length;
         let ggCount = checkGasGiantExistenceAndQuantity(this.primaryStar, starCount);
-        // Gera órbitas seguindo as regras oficiais
+
+        // Gera órbitas (regras oficiais)
         this.orbitSlots = generateOrbitSlots();
+
+        // Define Gas Giants
         if (ggCount > 0) {
           let shuffled = [...this.orbitSlots].sort(() => Math.random() - 0.5);
           let ggSlots = shuffled.slice(0, ggCount);
           ggSlots.forEach(s => s.planetType = "Gas Giant");
         }
+
         this.planets = [];
         let planetIndex = 1;
         for (let slot of this.orbitSlots) {
@@ -660,7 +770,7 @@
             planetIndex++;
           } else {
             if (rollDice(1,6) >= 4) {
-              let r = Math.floor(Math.random() * 100) + 1;
+              let r = Math.floor(Math.random()*100)+1;
               let pType = (r <= 60) ? "Terrestrial (Barren)" : "Terrestrial (Inhabited)";
               let pl = new Planet(planetIndex, pType, slot.distanceAU);
               this.planets.push(pl);
@@ -668,12 +778,18 @@
             }
           }
         }
+
+        // Gera belts
         let belts = generatePlanetoidBelts(this);
-        belts.forEach(b => { this.planets.push(b); });
+        belts.forEach(b => this.planets.push(b));
+
+        // Período orbital
         this.planets.forEach(p => {
           let periodYears = Math.sqrt(Math.pow(p.orbit,3) / this.primaryStar.mass);
           p.orbitalPeriod = Math.round(periodYears * 365.25);
         });
+
+        // Identifica mainworld
         let L = this.primaryStar.luminosity;
         let innerHZ = Math.sqrt(L / 1.51);
         let outerHZ = Math.sqrt(L / 0.54);
@@ -689,10 +805,14 @@
             mainPlanet = this.planets[0];
           }
         }
-        if (mainPlanet) mainPlanet.isMainworld = true;
+        if (mainPlanet) {
+          mainPlanet.isMainworld = true;
+        }
+
+        // Ordena
         this.planets.sort((a,b) => a.orbit - b.orbit);
-        for (let i = 0; i < this.planets.length; i++) {
-          this.planets[i].index = i + 1;
+        for (let i=0; i<this.planets.length; i++) {
+          this.planets[i].index = i+1;
         }
       }
 
@@ -744,7 +864,7 @@
               <th>Cultura</th>
               <th>Economia</th>
               <th>Bioma</th>
-              <th>Temperatura Média (K)</th>
+              <th>Temperaturas</th>
             </tr>
           </thead>
           <tbody>`;
