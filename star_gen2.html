@@ -567,225 +567,471 @@
 				<td></td>
 			<tr>
 		</template>
-				<!-- Adicione este container para a imagem, se ainda não existir -->
-		<!-- Adicione/garanta que exista este container para a imagem -->
-		<!-- Adicione, se não tiver, este container para a imagem e botões de zoom -->
-		<div id="system_diagram" style="margin-top:20px;"></div>
-		<div>
-			<button onclick="zoomIn()">Zoom In (+)</button>
-			<button onclick="zoomOut()">Zoom Out (-)</button>
-		</div>
-			<!-- Container para o diagrama e botões de zoom -->
+<!-- Div onde o SVG do sistema será desenhado -->
+<!-- Div onde o SVG do sistema será desenhado -->
+<!-- Div para o diagrama e botões de zoom -->
+<div id="system_diagram" style="margin-top:20px;"></div>
+<div style="margin-top:10px;">
+  <button onclick="zoomIn()">Zoom In (+)</button>
+  <button onclick="zoomOut()">Zoom Out (-)</button>
+</div>
 
-		<script>
-		// ----------------------------------------------------
-		// (A) Conversão de numerais romanos para inteiros
-		// ----------------------------------------------------
-		const romanMap = {
-		"I": 1, "II": 2, "III": 3, "IV": 4, "V": 5,
-		"VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10,
-		"XI": 11, "XII": 12, "XIII": 13, "XIV": 14, "XV": 15,
-		"XVI": 16, "XVII": 17, "XVIII": 18, "XIX": 19, "XX": 20
-		};
-		function getObjectOrder(roman) {
-		let r = roman.toUpperCase().replace(/\s+/g, "");
-		return romanMap[r] || 999;
-		}
+<script>
+// ----------------------------------------------------
+// 1) Converte a "Class" da estrela (ex: "G") em cor
+// ----------------------------------------------------
+function getStarColorFromSpectralType(starClass) {
+  let sc = starClass.toUpperCase();
+  if (sc.includes("O")) return "#9bb0ff";
+  if (sc.includes("B")) return "#aabfff";
+  if (sc.includes("A")) return "#cad7ff";
+  if (sc.includes("F")) return "#f8f7ff";
+  if (sc.includes("G")) return "#fff4ea";
+  if (sc.includes("K")) return "#ffd2a1";
+  if (sc.includes("M")) return "#ffcc6f";
+  return "yellow";
+}
 
-		// ----------------------------------------------------
-		// (B) Converte a classe da estrela (ex: "G") em cor aproximada
-		// ----------------------------------------------------
-		function getStarColorFromSpectralType(starClass) {
-		starClass = starClass.toUpperCase();
-		if (starClass.includes("O")) return "#9bb0ff";   // Azul
-		if (starClass.includes("B")) return "#aabfff";   // Azul-branco
-		if (starClass.includes("A")) return "#cad7ff";   // Branco
-		if (starClass.includes("F")) return "#f8f7ff";   // Amarelo-branco
-		if (starClass.includes("G")) return "#fff4ea";   // Amarelo
-		if (starClass.includes("K")) return "#ffd2a1";   // Laranja
-		if (starClass.includes("M")) return "#ffcc6f";   // Vermelho/laranja
-		return "yellow";
-		}
+// ----------------------------------------------------
+// 2) Tabela p/ converter "I", "II", etc. em inteiro
+// ----------------------------------------------------
+const romanMap = {
+  "I": 1, "II": 2, "III": 3, "IV": 4, "V": 5,
+  "VI": 6, "VII": 7, "VIII": 8, "IX": 9, "X": 10,
+  "XI": 11, "XII": 12, "XIII": 13, "XIV": 14, "XV": 15,
+  "XVI": 16, "XVII": 17, "XVIII": 18, "XIX": 19, "XX": 20
+};
+function getObjectOrder(roman) {
+  let r = roman.toUpperCase().replace(/\s+/g, "");
+  return romanMap[r] || 999;
+}
 
-		// ----------------------------------------------------
-		// (C) Extrai dados das tabelas #star_tbl_entries e #planet_tbl_entries
-		//     • A 2ª coluna da tabela de estrelas (índice 1) contém a "Class" da estrela
-		//     • A 3ª coluna da tabela de planetas (índice 2) contém o "Object" (ex.: "I", "II", etc.)
-		//     • A 22ª coluna (índice 22) contém o UWP
-		//     • A 25ª coluna (índice 24) contém as "Notes" que são usadas para determinar o tipo
-		//     • Se "Notes" contiver "moon" ou "planetary ring", o objeto é ignorado
-		//     • Se "Notes" contiver "gas giant" ou "belt", define o tipo; caso contrário, assume "Terrestrial"
-		//     • Se a linha tiver a classe "candidate", marca isCandidate = true
-		// ----------------------------------------------------
-		function extractSystemData() {
-		let starData = {};
-		let starRows = document.querySelectorAll("#star_tbl_entries tr");
-		if (starRows.length > 0) {
-			let cells = starRows[0].querySelectorAll("td");
-			let starClass = cells[1].textContent.trim();
-			starData.spectralClass = starClass;
-			starData.color = getStarColorFromSpectralType(starClass);
-		} else {
-			starData = { spectralClass: "G", color: "#fff4ea" };
-		}
+// ----------------------------------------------------
+// 3) Lê a tabela de estrelas (apenas col 0,1,3):
+//    0 => component ("A", "Aa", "Aab", "AB", ...)
+//    1 => class ("G6 V", etc.)
+//    3 => AU
+// ----------------------------------------------------
+function extractStarsRaw() {
+  let starRows = document.querySelectorAll("#star_tbl_entries tr");
+  let starList = [];
 
-		let planets = [];
-		let planetRows = document.querySelectorAll("#planet_tbl_entries tr");
-		planetRows.forEach((row) => {
-			let cells = row.querySelectorAll("td");
-			let rowClass = row.getAttribute("class") || "";
-			let isCandidate = rowClass.includes("candidate");
-			if (cells.length >= 25) {
-			let objectName = cells[2].textContent.trim();  // ex: "I", "II", etc.
-			let uwp = cells[22].textContent.trim();          // UWP extraído da coluna 23 (índice 22)
-			let notesText = cells[24].textContent.trim().toLowerCase();
-			// Ignora objetos que são moons ou planetary rings
-			if (notesText.includes("moon") || notesText.includes("planetary ring")) {
-				return;
-			}
-			let type = "Terrestrial"; // padrão
-			if (notesText.includes("gas giant")) {
-				type = "Gas Giant";
-			} else if (notesText.includes("belt")) {
-				type = "Belt";
-			}
-			let order = getObjectOrder(objectName);
-			planets.push({
-				name: objectName,
-				order: order,
-				type: type,
-				isCandidate: isCandidate,
-				uwp: uwp
-			});
-			}
-		});
-		// Ordena os planetas pela ordem do numeral romano
-		planets.sort((a, b) => a.order - b.order);
-		return { star: starData, planets: planets };
-		}
+  starRows.forEach((row) => {
+    let cells = row.querySelectorAll("td");
+    // Precisamos de pelo menos 4 colunas (0..3)
+    if (cells.length >= 4) {
+      let comp    = cells[0].textContent.trim(); // ex.: "A", "Aa", "Aab"
+      let stClass = cells[1].textContent.trim(); // ex.: "G6 V"
+      let auText  = cells[3].textContent.trim(); // col 3 => AU
+      let starAU  = parseFloat(auText.replace(",", ".")) || 0;
 
-		// ----------------------------------------------------
-		// (D) Cria o SVG com tamanho 900x900, distribuição fixa e posição aleatória
-		//     • Cada planeta é colocado a uma distância fixa: minOrbitDist + índice * planetSpacing
-		//     • Para planetas (não belts), um ângulo aleatório é gerado (e exibido no tooltip)
-		//     • O tooltip inclui: tipo, objeto (ex: "I"), orbit number, ângulo em graus e UWP
-		// ----------------------------------------------------
-		function createSystemSVG(systemData) {
-		const width = 900, height = 900;
-		const centerX = width / 2, centerY = height / 2;
-		let svg = `<svg id="systemSVG" width="${width}" height="${height}" style="background: black;" viewBox="0 0 ${width} ${height}" preserveAspectRatio="xMidYMid meet">`;
+      let color   = getStarColorFromSpectralType(stClass);
 
-		// Desenha a estrela no centro
-		svg += `
-			<circle cx="${centerX}" cy="${centerY}" r="12" fill="${systemData.star.color}">
-			<title>Star Class: ${systemData.star.spectralClass}</title>
-			</circle>
-		`;
+      starList.push({
+        component: comp,
+        starClass: stClass,
+        color: color,
+        au: starAU,
+        // a definir:
+        isBaricenter: false,
+        parent: "",
+        children: [],
+        planetList: [],
+        x: 0,
+        y: 0
+      });
+    }
+  });
 
-		const planets = systemData.planets;
-		const planetSpacing = 40; // espaçamento fixo entre órbitas
-		const minOrbitDist = 60;  // distância do primeiro planeta
+  return starList;
+}
 
-		planets.forEach((planet, index) => {
-			let rOrbit = minOrbitDist + index * planetSpacing;
-			// Desenha o círculo da órbita
-			svg += `
-			<circle cx="${centerX}" cy="${centerY}" r="${rOrbit}"
-					fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1">
-			</circle>
-			`;
+// ----------------------------------------------------
+// 4) Classifica "component" como baricentro ou estrela
+//    Exemplo de heurística:
+//    - Se todo maiúsculo e length >= 2 => baricentro (ex. "AB", "ABC")
+//    - Se 1 maiúscula + 2 minúsculas => baricentro (ex. "Aab")
+//    - Caso contrário => estrela normal
+// ----------------------------------------------------
+function classifyComponentType(comp) {
+  // Se for todo maiúsculo e tiver tamanho >=2 => baricentro
+  if (/^[A-Z]{2,}$/.test(comp)) {
+    return true;
+  }
+  // Se for do tipo "Aab" => 1 maiúscula + 2 minúsculas => baricentro
+  if (/^[A-Z][a-z]{2}$/.test(comp)) {
+    return true;
+  }
+  // Caso contrário => estrela
+  return false;
+}
 
-			if (planet.type === "Belt") {
-			// Para belts, desenha várias bolinhas cinzas ao longo da órbita
-			const beltDots = 12;
-			for (let i = 0; i < beltDots; i++) {
-				let angle = i * (2 * Math.PI / beltDots);
-				let px = centerX + rOrbit * Math.cos(angle);
-				let py = centerY + rOrbit * Math.sin(angle);
-				svg += `
-				<circle cx="${px}" cy="${py}" r="2" fill="#aaa">
-					<title>Planetoid Belt - ${planet.name}</title>
-				</circle>
-				`;
-			}
-			} else {
-			// Gera um ângulo aleatório para a posição do planeta
-			let angle = Math.random() * 2 * Math.PI;
-			let angleDeg = Math.round(angle * 180 / Math.PI);
-			let px = centerX + rOrbit * Math.cos(angle);
-			let py = centerY + rOrbit * Math.sin(angle);
+// ----------------------------------------------------
+// 5) Monta a hierarquia deduzindo quem é pai de quem
+// ----------------------------------------------------
+function buildStarHierarchy(starList) {
+  let starMap = {};
 
-			// Define cor e tamanho: 
-			// Terrestre = vermelho, Gas Giant = marrom, Candidate = verde
-			let planetColor = "#f00";
-			let planetRadius = 5;
-			if (planet.type === "Gas Giant") {
-				planetColor = "#8B4513";
-				planetRadius = 7;
-			}
-			if (planet.isCandidate) {
-				planetColor = "#0f0";
-				planetRadius = 6;
-			}
-			let tooltip = `${planet.type} - ${planet.name} | Orbit: ${index+1} | Angle: ${angleDeg}° | UWP: ${planet.uwp}`;
-			svg += `
-				<circle cx="${px}" cy="${py}" r="${planetRadius}" fill="${planetColor}">
-				<title>${tooltip}</title>
-				</circle>
-			`;
-			}
-		});
+  // 1) Classifica e cria starMap
+  starList.forEach(obj => {
+    obj.isBaricenter = classifyComponentType(obj.component);
+    starMap[obj.component] = obj;
+  });
 
-		svg += `</svg>`;
-		return svg;
-		}
+  // 2) Para baricentros do tipo "Aab", atribuir "Aa" e "Ab" => parent = "Aab"
+  //    Para baricentros do tipo "AB", "ABC", etc., atribuir "A", "B", "C" => parent = "AB"/"ABC"
+  starList.forEach(bc => {
+    if (!bc.isBaricenter) return;
+    let cName = bc.component;
+    // Exemplo: "Aab"
+    if (/^[A-Z][a-z]{2}$/.test(cName)) {
+      // cName[0] => 'A', cName[1] => 'a', cName[2] => 'b'
+      let c1 = cName[0] + cName[1]; // "Aa"
+      let c2 = cName[0] + cName[2]; // "Ab"
+      if (starMap[c1] && !starMap[c1].isBaricenter) {
+        starMap[c1].parent = cName;
+      }
+      if (starMap[c2] && !starMap[c2].isBaricenter) {
+        starMap[c2].parent = cName;
+      }
+    }
+    // Se for todo maiúsculo >=2 => "AB", "ABC", etc.
+    else if (/^[A-Z]{2,}$/.test(cName)) {
+      let letters = cName.split(""); // ex.: ["A","B"] ou ["A","B","C"]
+      letters.forEach(L => {
+        if (starMap[L] && !starMap[L].parent) {
+          starMap[L].parent = cName;
+        }
+      });
+    }
+  });
 
-		// ----------------------------------------------------
-		// (E) Funções de Zoom In/Out
-		// ----------------------------------------------------
-		let zoomLevel = 1.0;
-		function zoomIn() {
-		zoomLevel *= 1.2;
-		updateViewBox();
-		}
-		function zoomOut() {
-		zoomLevel /= 1.2;
-		updateViewBox();
-		}
-		function updateViewBox() {
-		const baseSize = 900;
-		let newSize = baseSize / zoomLevel;
-		let offset = (baseSize - newSize) / 2;
-		let svgElem = document.getElementById("systemSVG");
-		if (svgElem) {
-			svgElem.setAttribute("viewBox", `${offset} ${offset} ${newSize} ${newSize}`);
-		}
-		}
+  // 3) Associar baricentros menores a baricentros maiores (ex. "AB" => parent="ABC")
+  starList.forEach(bc => {
+    if (!bc.isBaricenter) return;
+    let cName = bc.component;
+    let letters = cName.replace(/[^A-Z]/g, "").split("");
+    starList.forEach(other => {
+      if (!other.isBaricenter) return;
+      if (other.component === cName) return;
+      let oLetters = other.component.replace(/[^A-Z]/g, "").split("");
+      // checa se letters está contido em oLetters e se oLetters.length > letters.length
+      let setC = new Set(letters);
+      let setO = new Set(oLetters);
+      let isSubset = true;
+      for (let L of setC) {
+        if (!setO.has(L)) { isSubset = false; break; }
+      }
+      if (isSubset && oLetters.length > letters.length) {
+        // define parent se ainda não tiver
+        if (!bc.parent) {
+          bc.parent = other.component;
+        }
+      }
+    });
+  });
 
-		// ----------------------------------------------------
-		// (F) Função principal: gera e exibe o diagrama
-		// ----------------------------------------------------
-		function drawSystemDiagram() {
-		let data = extractSystemData();
-		let svgCode = createSystemSVG(data);
-		document.getElementById("system_diagram").innerHTML = svgCode;
-		zoomLevel = 1.0;
-		updateViewBox();
-		}
+  // 4) Agora refazemos o children
+  for (let c in starMap) {
+    starMap[c].children = []; // zera
+  }
+  for (let c in starMap) {
+    let node = starMap[c];
+    if (node.parent && starMap[node.parent]) {
+      starMap[node.parent].children.push(node);
+    }
+  }
 
-		// ----------------------------------------------------
-		// (G) Ao submeter o formulário ("Generate"), chama o diagrama após um pequeno delay
-		// ----------------------------------------------------
-		document.getElementById("form").addEventListener("submit", function() {
-		setTimeout(drawSystemDiagram, 300);
-		});
-		</script>
+  // 5) Achar top-level
+  let topStars = [];
+  for (let c in starMap) {
+    let node = starMap[c];
+    if (!node.parent) {
+      topStars.push(node);
+    }
+  }
 
-				
+  return { starMap, topStars };
+}
+
+// ----------------------------------------------------
+// 6) extrairStars principal: junta raw + buildHierarchy
+// ----------------------------------------------------
+function extractStars() {
+  let starList = extractStarsRaw();
+  let { starMap, topStars } = buildStarHierarchy(starList);
+  return { starMap, topStars };
+}
+
+// ----------------------------------------------------
+// 7) Lê a tabela de planetas (#planet_tbl_entries):
+//    col 1 => Primary
+//    col 2 => Object
+//    col 22 => UWP
+//    col 24 => Notes
+// ----------------------------------------------------
+function extractPlanets() {
+  let planetRows = document.querySelectorAll("#planet_tbl_entries tr");
+  let planets = [];
+
+  planetRows.forEach((row) => {
+    let cells = row.querySelectorAll("td");
+    if (cells.length >= 25) {
+      let primary    = cells[1].textContent.trim();
+      let objectName = cells[2].textContent.trim(); 
+      let uwp        = cells[22].textContent.trim();       
+      let notesText  = cells[24].textContent.trim().toLowerCase();
+
+      // Se contiver "moon" ou "planetary ring", ignorar
+      if (notesText.includes("moon") || notesText.includes("planetary ring")) {
+        return;
+      }
+
+      // Determina tipo
+      let type = "Terrestrial";
+      if (notesText.includes("gas giant")) {
+        type = "Gas Giant";
+      } else if (notesText.includes("belt")) {
+        type = "Belt";
+      }
+
+      let rowClass = row.getAttribute("class") || "";
+      let isCandidate = rowClass.includes("candidate");
+
+      let order = getObjectOrder(objectName);
+
+      planets.push({
+        primary: primary,
+        name: objectName,
+        uwp: uwp,
+        type: type,
+        isCandidate: isCandidate,
+        order: order
+      });
+    }
+  });
+  // Ordena planetas
+  planets.sort((a,b) => a.order - b.order);
+
+  return planets;
+}
+
+// ----------------------------------------------------
+// 8) Acha root (por ex. "ABC") ou topStars[0]
+// ----------------------------------------------------
+function findRoot(topStars) {
+  let idx = topStars.findIndex(n => n.component.toUpperCase() === "ABC");
+  if (idx >= 0) {
+    return topStars[idx];
+  }
+  if (topStars.length === 1) {
+    return topStars[0];
+  }
+  return topStars[0];
+}
+
+// ----------------------------------------------------
+// 9) layoutStars recursivo
+// ----------------------------------------------------
+function layoutStars(node, px, py, scale) {
+  let rOrbit = node.au * scale;
+  let angle = Math.random() * 2*Math.PI;
+  node.x = px + rOrbit * Math.cos(angle);
+  node.y = py + rOrbit * Math.sin(angle);
+
+  node.children.forEach(child => {
+    layoutStars(child, node.x, node.y, scale);
+  });
+}
+
+// ----------------------------------------------------
+// 10) Desenha as estrelas recursivamente
+// ----------------------------------------------------
+function drawStars(node, px, py, scale) {
+  let lines = "";
+  let rOrbit = node.au * scale;
+  if (rOrbit > 0) {
+    lines += `
+      <circle cx="${px}" cy="${py}" r="${rOrbit}"
+              fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1">
+      </circle>
+    `;
+  }
+  // Desenha a estrela / baricentro
+  lines += `
+    <circle cx="${node.x}" cy="${node.y}" r="10" fill="${node.color}">
+      <title>${node.component} (Class ${node.starClass}), AU=${node.au}</title>
+    </circle>
+  `;
+  // Recursivo
+  node.children.forEach(child => {
+    lines += drawStars(child, node.x, node.y, scale);
+  });
+  return lines;
+}
+
+// ----------------------------------------------------
+// 11) Atribuir planetas
+// ----------------------------------------------------
+function assignPlanetsToStars(starMap, topStars, planets) {
+  planets.forEach(p => {
+    let node = starMap[p.primary];
+    if (!node) {
+      node = topStars[0];
+    }
+    node.planetList.push(p);
+  });
+}
+
+// ----------------------------------------------------
+// 12) Desenhar planetas
+// ----------------------------------------------------
+function drawPlanets(node) {
+  let lines = "";
+  const planetSpacing = 40;
+  const minOrbitDist = 60;
+
+  node.planetList.forEach((p, idx) => {
+    let rOrbit = minOrbitDist + idx*planetSpacing;
+    lines += `
+      <circle cx="${node.x}" cy="${node.y}" r="${rOrbit}"
+              fill="none" stroke="rgba(255,255,255,0.3)" stroke-width="1">
+      </circle>
+    `;
+    if (p.type === "Belt") {
+      let beltDots = 12;
+      for (let i=0; i<beltDots; i++) {
+        let angle = i*(2*Math.PI / beltDots);
+        let px = node.x + rOrbit*Math.cos(angle);
+        let py = node.y + rOrbit*Math.sin(angle);
+        let tip = `UWP: ${p.uwp} | Orbit: ${idx+1} | Star: ${p.primary}`;
+        lines += `
+          <circle cx="${px}" cy="${py}" r="2" fill="#aaa">
+            <title>${tip}</title>
+          </circle>
+        `;
+      }
+    } else {
+      let angle = Math.random()*2*Math.PI;
+      let px = node.x + rOrbit*Math.cos(angle);
+      let py = node.y + rOrbit*Math.sin(angle);
+
+      let planetColor = "#f00";
+      if (p.type === "Gas Giant") {
+        planetColor = "#8B4513";
+      }
+      if (p.isCandidate) {
+        planetColor = "#0f0";
+      }
+      let tip = `UWP: ${p.uwp} | Orbit: ${idx+1} | Star: ${p.primary}`;
+      lines += `
+        <circle cx="${px}" cy="${py}" r="5" fill="${planetColor}">
+          <title>${tip}</title>
+        </circle>
+      `;
+    }
+  });
+
+  node.children.forEach(child => {
+    lines += drawPlanets(child);
+  });
+  return lines;
+}
+
+// ----------------------------------------------------
+// 13) Cria o SVG final
+// ----------------------------------------------------
+function createSystemSVG(data) {
+  const width = 900, height = 900;
+  let svg = `<svg id="systemSVG" width="${width}" height="${height}"
+               style="background: black;"
+               viewBox="0 0 ${width} ${height}"
+               preserveAspectRatio="xMidYMid meet">`;
+
+  let { starMap, topStars, planets } = data;
+
+  // Achar root
+  let root = findRoot(topStars);
+
+  // Coloca root no centro
+  const centerX = width/2, centerY = height/2;
+  root.x = centerX;
+  root.y = centerY;
+
+  // Layout recursivo
+  let starScale = 200;
+  root.children.forEach(child => {
+    layoutStars(child, centerX, centerY, starScale);
+  });
+
+  // Atribuir planetas
+  assignPlanetsToStars(starMap, topStars, planets);
+
+  // Desenhar root
+  let lines = `
+    <circle cx="${root.x}" cy="${root.y}" r="10" fill="${root.color}">
+      <title>${root.component} (Class ${root.starClass}), root-level</title>
+    </circle>
+  `;
+  // Desenhar filhos
+  root.children.forEach(child => {
+    lines += drawStars(child, root.x, root.y, starScale);
+  });
+  // Desenhar planetas do root
+  lines += drawPlanets(root);
+
+  svg += lines + `</svg>`;
+  return svg;
+}
+
+// ----------------------------------------------------
+// 14) Zoom
+// ----------------------------------------------------
+let zoomLevel = 1.0;
+function zoomIn() {
+  zoomLevel *= 1.2;
+  updateViewBox();
+}
+function zoomOut() {
+  zoomLevel /= 1.2;
+  updateViewBox();
+}
+function updateViewBox() {
+  const baseSize = 900;
+  let newSize = baseSize / zoomLevel;
+  let offset = (baseSize - newSize) / 2;
+  let svgElem = document.getElementById("systemSVG");
+  if (svgElem) {
+    svgElem.setAttribute("viewBox", `${offset} ${offset} ${newSize} ${newSize}`);
+  }
+}
+
+// ----------------------------------------------------
+// 15) Gera e exibe o diagrama
+// ----------------------------------------------------
+function drawSystemDiagram() {
+  let { starMap, topStars } = extractStars(); // deduz hierarquia
+  let planets = extractPlanets();             // lê planetas
+
+  let data = { starMap, topStars, planets };
+  let svgCode = createSystemSVG(data);
+  document.getElementById("system_diagram").innerHTML = svgCode;
+  zoomLevel = 1.0;
+  updateViewBox();
+}
+
+// ----------------------------------------------------
+// 16) Ao clicar em "Generate" (submit do form), chama
+// ----------------------------------------------------
+document.getElementById("form").addEventListener("submit", function() {
+  setTimeout(drawSystemDiagram, 300);
+});
+</script>
 
 
-		
-			
+
+
+
 
 
 	</body>
