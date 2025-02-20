@@ -622,8 +622,10 @@ function extractStarsRaw() {
     if (cells.length >= 4) {
       let comp    = cells[0].textContent.trim(); // ex.: "A", "Aa", "Aab"
       let stClass = cells[1].textContent.trim(); // ex.: "G6 V"
-      let auText  = cells[7].textContent.trim(); // col 3 => AU
-      let starAU  = parseFloat(auText.replace(",", ".")) || 0;
+      let massText  = cells[2].textContent.trim(); // col 7 => AU
+	  let AuText = cells[7].textContent.trim();
+	  let StarAu  = parseFloat(AuText.replace(",", ".","-")) || 0;
+      let StarMass  = parseFloat(massText.replace(",", ".")) || 0;
 
       let color   = getStarColorFromSpectralType(stClass);
 
@@ -631,7 +633,8 @@ function extractStarsRaw() {
         component: comp,
         starClass: stClass,
         color: color,
-        au: starAU,
+        au: StarAu,
+		mass: StarMass,
         // a definir:
         isBaricenter: false,
         parent: "",
@@ -659,7 +662,7 @@ function classifyComponentType(comp) {
     return true;
   }
   // Se for do tipo "Aab" => 1 maiúscula + 2 minúsculas => baricentro
-  if (/^[A-Z][a-z]{2}$/.test(comp)) {
+  if (/^[A-Z][a-z]{2,}$/.test(comp)) {
     return true;
   }
   // Caso contrário => estrela
